@@ -1,0 +1,47 @@
+[build-system]
+requires = ["setuptools>=75", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "qscope"
+version = "0.2.0"
+description = "Active Hamiltonian learning for quantum-system diagnostics"
+readme = "README.md"
+requires-python = ">=3.11"
+license = {text = "MIT"}
+authors = [{name = "Q-Scope Team"}]
+dependencies = [
+  "qiskit~=2.5.2",
+  "numpy>=2.0,<3",
+  "matplotlib>=3.8,<4",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8,<9",
+  "pytest-cov>=5,<7",
+  "ruff>=0.8,<1",
+]
+ui = [
+  "streamlit>=1.40,<2",
+  "pandas>=2.2,<3",
+]
+
+[project.scripts]
+qscope = "qscope.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
+markers = ["integration: tests that exercise Qiskit simulation"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+ignore = ["E501"]

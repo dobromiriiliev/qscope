@@ -1,0 +1,93 @@
+{
+  "schema_version": 1,
+  "project": {
+    "name": "Q-Scope",
+    "description": "Active Hamiltonian learning for quantum diagnostics"
+  },
+  "num_qubits": 4,
+  "nominal": {
+    "J_zz": [
+      1.0,
+      1.0,
+      1.0
+    ],
+    "h_x": [
+      0.55,
+      0.55,
+      0.55,
+      0.55
+    ]
+  },
+  "hidden": {
+    "J_zz": [
+      1.0,
+      1.0,
+      0.65
+    ],
+    "h_x": [
+      0.55,
+      0.55,
+      0.55,
+      0.55
+    ]
+  },
+  "prior": {
+    "mode": "single_parameter_grid",
+    "drift_parameter_indices": [
+      0,
+      1,
+      2
+    ],
+    "drift_low": 0.45,
+    "drift_high": 1.15,
+    "values_per_parameter": 29
+  },
+  "experiment_space": {
+    "initial_states": [
+      "0000",
+      "++++",
+      "0101",
+      "+-+-"
+    ],
+    "times": [
+      0.2,
+      0.45,
+      0.75,
+      1.05
+    ],
+    "observables": [
+      "ZZII",
+      "IZZI",
+      "IIZZ",
+      "XIII",
+      "IXII",
+      "IIXI",
+      "IIIX",
+      "XXII",
+      "IXXI",
+      "IIXX"
+    ],
+    "shots": 512
+  },
+  "diagnosis": {
+    "strategy": "active",
+    "active_score": "information_gain",
+    "repeat_penalty": 0.35,
+    "max_steps": 10,
+    "min_steps": 3,
+    "stop_map_confidence": 0.97,
+    "seed": 7
+  },
+  "benchmark": {
+    "trials": 8,
+    "strategies": [
+      "active",
+      "random",
+      "fixed"
+    ],
+    "target_relative_error": 0.08
+  },
+  "output": {
+    "artifact_dir": "artifacts"
+  }
+}
