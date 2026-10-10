@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 """Graphical launcher for qscope."""
-
+from qscope.cli import main
 import tkinter as tk
 from tkinter import messagebox
 from qscope.cli import main
 
-
+if __name__ == "__main__":
+    raise SystemExit(main(["demo", *__import__("sys").argv[1:]]))
 def run_command(command):
     status.set(f"Running: {command} ...")
     root.update_idletasks()
