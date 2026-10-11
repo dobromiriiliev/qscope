@@ -1,72 +1,58 @@
 {
-  "schema_version": 1,
-  "project": {
-    "name": "Q-Scope smoke",
-    "description": "Tiny CI/smoke config"
-  },
-  "num_qubits": 2,
-  "nominal": {
-    "J_zz": [
+  "model": {
+    "type": "tfim",
+    "n_qubits": 3,
+    "J": [
+      1.0,
       1.0
     ],
-    "h_x": [
-      0.5,
-      0.5
+    "h": [
+      0.4,
+      0.4,
+      0.4
     ]
   },
-  "hidden": {
-    "J_zz": [
-      0.7
-    ],
-    "h_x": [
-      0.5,
-      0.5
-    ]
+  "hidden_system": {
+    "drift_term": "ZZ_12",
+    "delta": -0.2
   },
-  "prior": {
-    "mode": "single_parameter_grid",
-    "drift_parameter_indices": [
-      0
+  "hypotheses": {
+    "terms": [
+      "ZZ_01",
+      "ZZ_12"
     ],
-    "drift_low": 0.5,
-    "drift_high": 1.1,
-    "values_per_parameter": 7
+    "delta_min": -0.2,
+    "delta_max": 0.2,
+    "delta_step": 0.2,
+    "include_no_drift": false
   },
-  "experiment_space": {
-    "initial_states": [
-      "00",
-      "++"
+  "experiments": {
+    "states": [
+      "000",
+      "+++"
     ],
     "times": [
       0.3,
       0.7
     ],
     "observables": [
-      "ZZ",
-      "XI",
-      "IX"
+      "ZZ_01",
+      "ZZ_12",
+      "X_1"
     ],
-    "shots": 128
+    "shots": 32
   },
-  "diagnosis": {
-    "strategy": "active",
-    "active_score": "information_gain",
-    "repeat_penalty": 0.35,
-    "max_steps": 2,
-    "min_steps": 1,
-    "stop_map_confidence": null,
-    "seed": 11
+  "policy": {
+    "switch_confidence": 0.7
   },
-  "benchmark": {
-    "trials": 2,
-    "strategies": [
-      "active",
-      "random",
-      "fixed"
-    ],
-    "target_relative_error": 0.15
+  "stopping": {
+    "location_confidence": 0.85,
+    "credible_interval_width": 0.4,
+    "max_experiments": 4
   },
-  "output": {
-    "artifact_dir": "artifacts/smoke"
-  }
+  "mismatch": {
+    "predictive_p_value": 0.001,
+    "consecutive_failures": 2
+  },
+  "seed": 7
 }

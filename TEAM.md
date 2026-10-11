@@ -1,17 +1,9 @@
 # Team
 
-## Christian — Physics
+Q-Scope was built by three contributors with separate areas of ownership.
 
-Owns the Hamiltonian model, parameter ranges, drift scenarios, measurement choices, and scientific validation. He should be able to explain why a chosen experiment is informative about a particular parameter.
+- **Dobromir — quantum simulation and inference.** Qiskit integration, Bayesian updates, active experiment selection, and end-to-end integration.
+- **Christian — physics.** Hamiltonian assumptions, drift scenarios, measurement choices, and scientific checks.
+- **Alex — benchmarking and product.** Baselines, benchmark runs, plots, reproducibility, and presentation.
 
-## Dobromir — Quantum / inference
-
-Owns Qiskit simulation, posterior inference, active experiment selection, and end-to-end integration. He should be able to explain how Q-Scope decides what to measure next.
-
-## Alex — Benchmarking / product
-
-Owns random/fixed baselines, benchmark runs, plots, UI, and fresh-clone reproducibility. He should be able to explain how the team knows Q-Scope is better than ordinary probing.
-
-## Shared
-
-Everyone reviews the final project page, video, originality disclosure, and submission checklist.
+All three contributors review the final model assumptions, benchmark setup, documentation, and release.

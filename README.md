@@ -1,189 +1,169 @@
 # Q-Scope
 
-**Active Hamiltonian learning for quantum-system diagnostics.**
+Q-Scope is an adaptive Hamiltonian-drift diagnostic built with Qiskit. It starts from a calibrated four-qubit transverse-field Ising model, assumes that one nearest-neighbor `ZZ` coupling may have drifted, and chooses each new measurement from the posterior produced by the measurements collected so far.
 
-Q-Scope is a hackathon project that asks: if a quantum system drifts, can we learn **what to measure next** instead of following a fixed measurement schedule?
-
-The MVP uses a small transverse-field Ising model, hides a drift in one nearest-neighbor coupling, generates finite-shot measurements with Qiskit, updates a posterior over candidate Hamiltonians, and chooses the next experiment by expected information gain. The active strategy is benchmarked against random and fixed probing.
-
-## Why this repo is structured this way
-
-The judging path must work on a free local simulator, so the default project has **no cloud dependency, API key, or hardware requirement**. Qiskit is the only quantum framework used by the core implementation. The repository is MIT licensed and includes the pieces needed for a Qollab submission: runnable notebook, project-page draft, demo script, originality disclosure, tests, CI, and reproducibility instructions.
-
-## Physics
-
-The MVP Hamiltonian is
+The core idea is simple:
 
 ```text
-H = sum_i J_i Z_i Z_(i+1) + sum_i h_i X_i
+predict -> choose -> measure -> update -> repeat
 ```
 
-For four qubits, Q-Scope assumes the nominal Hamiltonian is known approximately and one selected coupling may have drifted. This intentionally narrow prior makes the inference loop easy to explain and benchmark during the hackathon.
+Q-Scope first **localizes** the drifting coupling and then **calibrates** its magnitude. The final benchmark compares this adaptive strategy with random and fixed probing under the same experiment bank, shot count, stopping rule, and round budget.
 
-## Core loop
+This effort is supported by Qollab & IonQ.
+
+## Model
+
+The nominal Hamiltonian is
 
 ```text
-Hidden Hamiltonian
-      |
-      v
-Choose experiment  <-------------------+
-      |                                |
-      v                                |
-Run Qiskit simulation                  |
-      |                                |
-      v                                |
-Finite-shot Pauli measurement          |
-      |                                |
-      v                                |
-Bayesian posterior update              |
-      |                                |
-      +----> score next experiments ---+
+H0 = sum_i J_i Z_i Z_(i+1) + sum_i h_i X_i
 ```
 
-## Quick start
+with
 
-Python 3.11+ is recommended.
-
-```bash
-python -m venv .venv
-source .venv/bin/activate        # Windows: .venv\Scripts\activate
-python -m pip install -e .
-
-qscope inspect --config configs/mvp.json
-qscope demo --config configs/mvp.json
-qscope benchmark --config configs/mvp.json --trials 8
+```text
+J01 = J12 = J23 = 1.00
+h0 = h1 = h2 = h3 = 0.50
 ```
 
-Outputs are written to `artifacts/`.
+A candidate drift model is
 
-Run tests and submission checks:
-
-```bash
-python -m pip install -e '.[dev]'
-pytest -q
-ruff check src tests scripts ui
-qscope validate-submission --root .
+```text
+H(r, delta) = H0 + delta P_r
 ```
 
-Optional Streamlit UI:
+where `r` is one of `ZZ_01`, `ZZ_12`, or `ZZ_23`. The default demonstration hides a drift at `ZZ_23` with `delta = -0.35`, so the true `J23` value is `0.65`.
 
-```bash
-python -m pip install -e '.[ui]'
-streamlit run ui/app.py
+The hypothesis grid contains 20 nonzero drift values per location from `-0.50` through `+0.50` in increments of `0.05`, giving 60 candidate Hamiltonians.
+
+## Adaptive policy
+
+Each experiment is a tuple
+
+```text
+e = (initial state, evolution time, observable)
 ```
+
+from two initial states, seven evolution times, and seven observables. That produces 98 candidate experiments.
+
+For each hypothesis and experiment, Qiskit predicts
+
+```text
+p(+1 | h, e) = (1 + <M>_(h,e)) / 2.
+```
+
+Each selected experiment is sampled with 128 shots. The observed `+1` count is modeled with a binomial likelihood and used to update the posterior in log space.
+
+During `LOCALIZE`, Q-Scope maximizes expected information gain over the three fault locations. When the leading location reaches 90% posterior probability, the policy switches to `CALIBRATE` and maximizes expected information gain over drift magnitude at that location.
+
+The default run stops when the location posterior reaches 98% and the 90% credible interval for drift is no wider than `0.05`, or after 15 rounds.
+
+See [`docs/ALGORITHM.md`](docs/ALGORITHM.md) for the full derivation.
 
 ## Repository layout
 
 ```text
-qscope-complete/
-├── .github/workflows/ci.yml
-├── configs/
-│   ├── mvp.json
-│   └── smoke.json
-├── docs/
-│   ├── ALGORITHM.md
-│   ├── ARCHITECTURE.md
-│   ├── DEMO_SCRIPT.md
-│   ├── HACKATHON_CHECKLIST.md
-│   ├── QOLLAB_PROJECT_PAGE.md
-│   ├── REPRODUCIBILITY.md
-│   └── RESEARCH_NOTES.md
-├── notebooks/qollab_demo.ipynb
-├── scripts/
-├── src/qscope/
-├── tests/
-├── ui/app.py
-├── LICENSE
-├── ORIGINALITY.md
-├── TEAM.md
-└── pyproject.toml
+main.py                 single-file Qollab entry point
+src/qscope/              reusable package implementation
+configs/                 MVP and smoke configurations
+scripts/                 local run and validation helpers
+tests/                   unit and integration tests
+docs/                    algorithm, validation, and Qollab documentation
+visuals/                 source for the project thumbnail
+assets/                  reference outputs from the validated demo
 ```
 
-## Commands
+## Quick start
 
-### Inspect the configured experiment
+Use Python 3.11-3.13.
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip
+pip install -e '.[dev]'
+```
+
+Run the tests:
+
+```bash
+pytest -q
+```
+
+Inspect the full configuration:
 
 ```bash
 qscope inspect --config configs/mvp.json
 ```
 
-### Run active diagnosis
+Run the package demo:
 
 ```bash
 qscope demo --config configs/mvp.json
 ```
 
-Override the policy for comparison:
+Run the package benchmark:
 
 ```bash
-qscope demo --config configs/mvp.json --strategy random
-qscope demo --config configs/mvp.json --strategy fixed
+qscope benchmark --config configs/mvp.json --trials 2
 ```
 
-### Benchmark policies
+Run the Qollab single-file version locally:
 
 ```bash
-qscope benchmark --config configs/mvp.json --trials 8
+python -c "import main; main.main()"
 ```
 
-This creates:
-
-- `artifacts/benchmark_raw.csv`
-- `artifacts/benchmark_summary.csv`
-- `artifacts/benchmark_headline.json`
-- `artifacts/benchmark.png`
-
-### Validate submission structure
-
-```bash
-qscope validate-submission --root .
-```
-
-## Active learning
-
-Each candidate experiment is defined by
-
-```python
-Experiment(
-    initial_state="++++",
-    time=0.75,
-    observable="IIZZ",
-    shots=512,
-)
-```
-
-For every remaining candidate Hamiltonian, Q-Scope predicts the expectation value for that experiment. The default policy estimates the one-shot expected information gain and chooses the experiment with the highest score, with a mild repeat penalty. A simpler posterior-weighted variance score is also supported.
-
-## MVP benchmark
-
-The primary comparison is:
+That writes:
 
 ```text
-active selection vs random selection vs fixed schedule
+qscope_dashboard.png
+qscope_protocol.png
+qscope_measurement.png
+qscope_offgrid_benchmark.png
+qscope_results.json
 ```
 
-All strategies get the same shot budget and experiment budget. The headline metrics are relative parameter error and the number of experiments required to reach a target reconstruction error. Do not claim a numerical advantage until you have run the benchmark and saved the resulting artifact.
+## Off-grid validation
 
-## Extending the project
+The inference grid is spaced by `0.05`, but the benchmark hides `delta = -0.275` and `+0.275`, exactly halfway between adjacent grid values. The six physical cases are the three possible drift locations crossed with the two off-grid drift values. Two paired seeds are used by the single-file Qollab benchmark, giving 12 cases per policy.
 
-The clean extension points are:
+A case is counted as successful only when the stopping target is reached, the correct coupling is identified, and
 
-1. Add new Hamiltonian parameter classes and builders.
-2. Add new experiment families or initial states.
-3. Add a richer prior for multiple simultaneous drifts.
-4. Add new active-learning scores.
-5. Add a backend adapter after the local path is stable.
+```text
+|delta_hat - delta_true| <= 0.075.
+```
 
-Do **not** make hardware access a requirement for the judged path.
+The current validated Qollab run produced a 100% target-reached rate for Q-Scope, compared with 17% for Fixed and 0% for Random. Mean absolute drift error was `0.019` for Q-Scope, `0.052` for Random, and `0.111` for Fixed. These numbers are included as a record of that seeded run; regenerate the benchmark before making new claims after changing the model or policy.
 
-## Hackathon submission files
+More detail is in [`docs/VALIDATION.md`](docs/VALIDATION.md).
 
-- `docs/QOLLAB_PROJECT_PAGE.md` — project-page draft
-- `docs/DEMO_SCRIPT.md` — 2–3 minute video outline
-- `ORIGINALITY.md` — prior-work/template disclosure
-- `TEAM.md` — role split
-- `LICENSE` — MIT
+## Qollab
+
+The submitted Qollab path is intentionally self-contained. `main.py` contains the complete four-qubit demo, adaptive inference loop, plotting code, and off-grid benchmark. It requires only:
+
+```text
+qiskit
+numpy
+scipy
+matplotlib
+```
+
+No cloud credentials or remote hardware account are needed.
+
+The text used for the Qollab project page is in [`docs/QOLLAB_PROJECT_PAGE.md`](docs/QOLLAB_PROJECT_PAGE.md).
+
+## Research context
+
+Q-Scope is motivated by repeated Hamiltonian-characterization problems where a nominal Hamiltonian is already useful but one or more parameters drift over time. The closest conceptual reference for the project is the Hafezi Group's Meta Hamiltonian Learning setting. Q-Scope is not a reproduction of that method; it uses a transparent discrete Bayesian hypothesis model and hierarchical active experiment selection.
+
+See [`docs/RESEARCH_NOTES.md`](docs/RESEARCH_NOTES.md).
+
+## Scope
+
+The current prototype deliberately focuses on one drifting nearest-neighbor `ZZ` coupling in a four-qubit model. It does not claim arbitrary Hamiltonian reconstruction, large-system scalability, quantum advantage, simultaneous multi-fault recovery, or real-hardware validation.
 
 ## License
 
-MIT. See `LICENSE`.
+MIT. See [`LICENSE`](LICENSE).

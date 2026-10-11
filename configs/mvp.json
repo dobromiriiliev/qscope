@@ -1,93 +1,70 @@
 {
-  "schema_version": 1,
-  "project": {
-    "name": "Q-Scope",
-    "description": "Active Hamiltonian learning for quantum diagnostics"
-  },
-  "num_qubits": 4,
-  "nominal": {
-    "J_zz": [
+  "model": {
+    "type": "tfim",
+    "n_qubits": 4,
+    "J": [
       1.0,
       1.0,
       1.0
     ],
-    "h_x": [
-      0.55,
-      0.55,
-      0.55,
-      0.55
+    "h": [
+      0.5,
+      0.5,
+      0.5,
+      0.5
     ]
   },
-  "hidden": {
-    "J_zz": [
-      1.0,
-      1.0,
-      0.65
-    ],
-    "h_x": [
-      0.55,
-      0.55,
-      0.55,
-      0.55
-    ]
+  "hidden_system": {
+    "drift_term": "ZZ_23",
+    "delta": -0.35
   },
-  "prior": {
-    "mode": "single_parameter_grid",
-    "drift_parameter_indices": [
-      0,
-      1,
-      2
+  "hypotheses": {
+    "terms": [
+      "ZZ_01",
+      "ZZ_12",
+      "ZZ_23"
     ],
-    "drift_low": 0.45,
-    "drift_high": 1.15,
-    "values_per_parameter": 29
+    "delta_min": -0.5,
+    "delta_max": 0.5,
+    "delta_step": 0.05,
+    "include_no_drift": false
   },
-  "experiment_space": {
-    "initial_states": [
+  "experiments": {
+    "states": [
       "0000",
-      "++++",
-      "0101",
-      "+-+-"
+      "++++"
     ],
     "times": [
       0.2,
-      0.45,
-      0.75,
-      1.05
+      0.4,
+      0.6,
+      0.8,
+      1.0,
+      1.2,
+      1.5
     ],
     "observables": [
-      "ZZII",
-      "IZZI",
-      "IIZZ",
-      "XIII",
-      "IXII",
-      "IIXI",
-      "IIIX",
-      "XXII",
-      "IXXI",
-      "IIXX"
+      "ZZ_01",
+      "ZZ_12",
+      "ZZ_23",
+      "X_0",
+      "X_1",
+      "X_2",
+      "X_3"
     ],
-    "shots": 512
+    "shots": 128
   },
-  "diagnosis": {
-    "strategy": "active",
-    "active_score": "information_gain",
-    "repeat_penalty": 0.35,
-    "max_steps": 10,
-    "min_steps": 3,
-    "stop_map_confidence": 0.97,
-    "seed": 7
+  "policy": {
+    "switch_confidence": 0.9
   },
-  "benchmark": {
-    "trials": 8,
-    "strategies": [
-      "active",
-      "random",
-      "fixed"
-    ],
-    "target_relative_error": 0.08
+  "stopping": {
+    "location_confidence": 0.98,
+    "credible_interval_width": 0.05,
+    "max_experiments": 15
   },
-  "output": {
-    "artifact_dir": "artifacts"
-  }
+  "mismatch": {
+    "predictive_p_value": 0.01,
+    "consecutive_failures": 2
+  },
+  "seed": 42
 }

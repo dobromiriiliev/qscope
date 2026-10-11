@@ -1,0 +1,26 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+
+# Environments
+.venv/
+.venv-*/
+.env
+
+# Generated outputs
+artifacts/*
+!artifacts/.gitkeep
+qscope_dashboard.png
+qscope_protocol.png
+qscope_measurement.png
+qscope_offgrid_benchmark.png
+qscope_results.json
+media/
+
+# OS / editor
+.DS_Store
+.vscode/
+.idea/

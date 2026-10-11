@@ -1,10 +1,5 @@
-from pathlib import Path
-
-from qscope.submission import checks_passed, validate_repository
-
-ROOT = Path(__file__).resolve().parents[1]
+from qscope.submission import validate_submission
 
 
-def test_repository_submission_structure():
-    checks = validate_repository(ROOT)
-    assert checks_passed(checks), [c for c in checks if not c.passed]
+def test_submission_layout():
+    assert validate_submission(".") == []

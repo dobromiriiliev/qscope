@@ -1,99 +1,197 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-import random
-from typing import Literal
+from dataclasses import dataclass
 
 import numpy as np
 
-from .inference import ParticlePosterior, entropy, weighted_variance
-from .types import Experiment
-
-ActiveScore = Literal["variance", "information_gain"]
+from qscope.inference import entropy
 
 
-@dataclass
-class PredictionCache:
-    predictions: dict[tuple[str, float, str, int], np.ndarray] = field(default_factory=dict)
-
-    def get(self, experiment: Experiment) -> np.ndarray | None:
-        return self.predictions.get(experiment.key)
-
-    def put(self, experiment: Experiment, values: np.ndarray) -> None:
-        self.predictions[experiment.key] = np.asarray(values, dtype=float)
-
-    def require(self, experiment: Experiment) -> np.ndarray:
-        values = self.get(experiment)
-        if values is None:
-            raise KeyError(f"missing cached predictions for {experiment.label}")
-        return values
+@dataclass(frozen=True)
+class PolicyDecision:
+    experiment_id: int
+    score: float
+    mode: str
+    explanation: str
 
 
-def information_gain_score(posterior: ParticlePosterior, predictions: np.ndarray) -> float:
-    """Expected one-shot information gain for a +/-1 measurement."""
-    mu = np.clip(np.asarray(predictions, dtype=float), -1.0, 1.0)
-    p_plus_model = np.clip((1.0 + mu) / 2.0, 1e-12, 1.0 - 1e-12)
-    w = posterior.weights
-    p_plus = float(np.dot(w, p_plus_model))
-    p_minus = 1.0 - p_plus
+def _membership(belief) -> np.ndarray:
+    matrix = np.zeros(
+        (len(belief.locations), len(belief.hypotheses)),
+        dtype=float,
+    )
 
-    prior_h = entropy(w)
-    expected_h = 0.0
-    if p_plus > 1e-15:
-        w_plus = w * p_plus_model / p_plus
-        expected_h += p_plus * entropy(w_plus)
-    if p_minus > 1e-15:
-        w_minus = w * (1.0 - p_plus_model) / p_minus
-        expected_h += p_minus * entropy(w_minus)
-    return max(0.0, float(prior_h - expected_h))
+    for row, location in enumerate(belief.locations):
+        matrix[row, belief.indices_for_location(location)] = 1.0
+
+    return matrix
 
 
-def score_experiment(
-    posterior: ParticlePosterior,
-    predictions: np.ndarray,
-    method: ActiveScore = "information_gain",
-) -> float:
-    if method == "variance":
-        return weighted_variance(predictions, posterior.weights)
-    if method == "information_gain":
-        return information_gain_score(posterior, predictions)
-    raise ValueError(f"unknown active score: {method}")
+class HierarchicalInformationPolicy:
+    def __init__(self, switch_confidence: float):
+        self.switch_confidence = switch_confidence
+
+    def _location_scores(self, belief, likelihoods, experiments):
+        location_posterior = belief.location_posterior()
+        current = np.array(
+            [location_posterior[x] for x in belief.locations],
+            dtype=float,
+        )
+        current_entropy = entropy(current)
+        membership = _membership(belief)
+        scores = np.zeros(len(experiments), dtype=float)
+
+        for experiment in experiments:
+            pmf = likelihoods.probabilities(experiment.id)
+            predictive = belief.weights @ pmf
+            joint = belief.weights[:, None] * pmf
+            posterior = np.divide(
+                joint,
+                predictive[None, :],
+                out=np.zeros_like(joint),
+                where=predictive[None, :] > 0,
+            )
+            location_given_count = membership @ posterior
+            expected_entropy = float(
+                predictive @ entropy(location_given_count, axis=0)
+            )
+            scores[experiment.id] = current_entropy - expected_entropy
+
+        return scores
+
+    def _delta_scores(self, belief, location, likelihoods, experiments):
+        indices = belief.indices_for_location(location)
+        conditional = belief.weights[indices]
+        conditional = conditional / conditional.sum()
+        current_entropy = entropy(conditional)
+        scores = np.zeros(len(experiments), dtype=float)
+
+        for experiment in experiments:
+            pmf = likelihoods.probabilities(experiment.id)[indices, :]
+            predictive = conditional @ pmf
+            joint = conditional[:, None] * pmf
+            posterior = np.divide(
+                joint,
+                predictive[None, :],
+                out=np.zeros_like(joint),
+                where=predictive[None, :] > 0,
+            )
+            expected_entropy = float(predictive @ entropy(posterior, axis=0))
+            scores[experiment.id] = current_entropy - expected_entropy
+
+        return scores
+
+    def _location_expectation(self, belief, location, experiment_id, predictions):
+        indices = belief.indices_for_location(location)
+        weights = belief.weights[indices]
+        total = float(weights.sum())
+
+        if total <= 0:
+            return None
+
+        weights = weights / total
+        p = float(weights @ predictions.p_plus[indices, experiment_id])
+        return 2.0 * p - 1.0
+
+    def _explanation(self, belief, experiment, predictions):
+        ranked = sorted(
+            belief.location_posterior().items(),
+            key=lambda item: item[1],
+            reverse=True,
+        )
+
+        values = []
+        for location, _ in ranked:
+            expectation = self._location_expectation(
+                belief,
+                location,
+                experiment.id,
+                predictions,
+            )
+            if expectation is not None:
+                values.append((location, expectation))
+            if len(values) == 2:
+                break
+
+        if len(values) < 2:
+            return (
+                f"Selected {experiment.observable} at "
+                f"t={experiment.evolution_time:g}."
+            )
+
+        gap = abs(values[0][1] - values[1][1])
+        return (
+            f"Selected {experiment.observable} at t={experiment.evolution_time:g}; "
+            f"the two leading location hypotheses differ by {gap:.3f} "
+            f"in predicted expectation."
+        )
+
+    def select(self, belief, experiments, predictions, likelihoods):
+        location, confidence = belief.top_location()
+
+        if location != "NO_DRIFT" and confidence >= self.switch_confidence:
+            scores = self._delta_scores(
+                belief,
+                location,
+                likelihoods,
+                experiments,
+            )
+            mode = "CALIBRATE"
+        else:
+            scores = self._location_scores(
+                belief,
+                likelihoods,
+                experiments,
+            )
+            mode = "LOCALIZE"
+
+        experiment_id = int(np.argmax(scores))
+        experiment = experiments[experiment_id]
+
+        return PolicyDecision(
+            experiment_id,
+            float(scores[experiment_id]),
+            mode,
+            self._explanation(belief, experiment, predictions),
+        )
 
 
-def choose_active_experiment(
-    posterior: ParticlePosterior,
-    experiments: list[Experiment],
-    cache: PredictionCache,
-    used_counts: dict[tuple[str, float, str, int], int] | None = None,
-    *,
-    score_method: ActiveScore = "information_gain",
-    repeat_penalty: float = 0.35,
-) -> tuple[Experiment, float]:
-    if not experiments:
-        raise ValueError("experiment space is empty")
-    used_counts = used_counts or {}
+class RandomPolicy:
+    def __init__(self, seed: int):
+        self.rng = np.random.default_rng(seed)
 
-    best: Experiment | None = None
-    best_score = -np.inf
-    for experiment in experiments:
-        raw_score = score_experiment(posterior, cache.require(experiment), score_method)
-        repeats = used_counts.get(experiment.key, 0)
-        adjusted = raw_score / (1.0 + repeat_penalty * repeats)
-        if adjusted > best_score:
-            best = experiment
-            best_score = adjusted
-
-    assert best is not None
-    return best, float(best_score)
+    def select(self, belief, experiments, predictions, likelihoods):
+        experiment_id = int(self.rng.integers(0, len(experiments)))
+        experiment = experiments[experiment_id]
+        return PolicyDecision(
+            experiment_id,
+            0.0,
+            "RANDOM",
+            (
+                f"Selected {experiment.observable} at "
+                f"t={experiment.evolution_time:g} randomly."
+            ),
+        )
 
 
-def choose_random_experiment(experiments: list[Experiment], rng: random.Random) -> Experiment:
-    if not experiments:
-        raise ValueError("experiment space is empty")
-    return rng.choice(experiments)
+class FixedPolicy:
+    def __init__(self, experiment_ids=None):
+        self.experiment_ids = (
+            None if experiment_ids is None else tuple(experiment_ids)
+        )
+        self.position = 0
 
-
-def choose_fixed_experiment(experiments: list[Experiment], step_index: int) -> Experiment:
-    if not experiments:
-        raise ValueError("experiment space is empty")
-    return experiments[step_index % len(experiments)]
+    def select(self, belief, experiments, predictions, likelihoods):
+        schedule = self.experiment_ids or tuple(range(len(experiments)))
+        experiment_id = int(schedule[self.position % len(schedule)])
+        self.position += 1
+        experiment = experiments[experiment_id]
+        return PolicyDecision(
+            experiment_id,
+            0.0,
+            "FIXED",
+            (
+                f"Selected {experiment.observable} at "
+                f"t={experiment.evolution_time:g} from the fixed schedule."
+            ),
+        )

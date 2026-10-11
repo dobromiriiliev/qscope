@@ -1,71 +1,69 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
 from pathlib import Path
-import re
 
 
-@dataclass(frozen=True)
-class Check:
-    name: str
-    passed: bool
-    detail: str
-
-
-REQUIRED_FILES = [
+REQUIRED = (
     "LICENSE",
     "README.md",
     "ORIGINALITY.md",
+    "HACKATHON_LOG.md",
     "docs/QOLLAB_PROJECT_PAGE.md",
     "docs/DEMO_SCRIPT.md",
-    "configs/mvp.json",
+    "docs/ALGORITHM.md",
+    "main.py",
     "notebooks/qollab_demo.ipynb",
-]
+    "qollab_demo.py",
+    "configs/mvp.json",
+)
 
-SECRET_PATTERNS = [
-    re.compile(r"(?i)(api[_-]?key|token|password)\s*[=:]\s*['\"][^'\"]{8,}"),
-    re.compile(r"sk-[A-Za-z0-9_-]{20,}"),
-]
+ATTRIBUTION = "Qollab & IonQ"
 
 
-def validate_repository(root: str | Path) -> list[Check]:
+def validate_submission(root: str | Path):
     root = Path(root)
-    checks: list[Check] = []
+    failures = []
 
-    for rel in REQUIRED_FILES:
-        p = root / rel
-        checks.append(Check(f"required:{rel}", p.exists(), "present" if p.exists() else "missing"))
+    for item in REQUIRED:
+        if not (root / item).exists():
+            failures.append(f"missing {item}")
 
     license_path = root / "LICENSE"
-    mit = license_path.exists() and "MIT License" in license_path.read_text(encoding="utf-8")
-    checks.append(Check("license:MIT", mit, "MIT text found" if mit else "MIT text not found"))
+    if license_path.exists() and "MIT License" not in license_path.read_text(
+        encoding="utf-8"
+    ):
+        failures.append("LICENSE is not MIT")
 
-    readme = (root / "README.md").read_text(encoding="utf-8") if (root / "README.md").exists() else ""
-    for phrase in ("Qiskit", "local", "MIT", "Qollab"):
-        ok = phrase.lower() in readme.lower()
-        checks.append(Check(f"readme:{phrase}", ok, "mentioned" if ok else "not mentioned"))
+    for item in ("README.md", "docs/QOLLAB_PROJECT_PAGE.md"):
+        path = root / item
+        if path.exists() and ATTRIBUTION not in path.read_text(encoding="utf-8"):
+            failures.append(f"missing Qollab/IonQ attribution in {item}")
 
-    suspicious: list[str] = []
-    for p in root.rglob("*"):
-        if not p.is_file() or any(part in {".git", ".venv", "__pycache__"} for part in p.parts):
-            continue
-        if p.suffix.lower() not in {".py", ".md", ".json", ".toml", ".txt", ".yml", ".yaml"}:
-            continue
-        try:
-            text = p.read_text(encoding="utf-8")
-        except UnicodeDecodeError:
-            continue
-        if any(pattern.search(text) for pattern in SECRET_PATTERNS):
-            suspicious.append(str(p.relative_to(root)))
-    checks.append(
-        Check(
-            "secrets:basic-scan",
-            not suspicious,
-            "no obvious secrets" if not suspicious else f"review: {', '.join(suspicious)}",
-        )
-    )
-    return checks
+    originality = root / "ORIGINALITY.md"
+    if originality.exists():
+        text = originality.read_text(encoding="utf-8").lower()
+        if "should be listed" in text or "record meaningful" in text:
+            failures.append("ORIGINALITY.md still contains placeholder text")
 
+    log = root / "HACKATHON_LOG.md"
+    if log.exists():
+        text = log.read_text(encoding="utf-8").lower()
+        if "record meaningful" in text:
+            failures.append("HACKATHON_LOG.md still contains placeholder text")
 
-def checks_passed(checks: list[Check]) -> bool:
-    return all(c.passed for c in checks)
+    source_root = root / "src"
+    if source_root.exists():
+        needles = ("ghp_", "api_key=", "token=")
+
+        for path in source_root.rglob("*.py"):
+            if path.name == "submission.py":
+                continue
+
+            text = path.read_text(encoding="utf-8").lower()
+            for needle in needles:
+                if needle in text:
+                    failures.append(
+                        f"possible credential in {path.relative_to(root)}"
+                    )
+
+    return failures

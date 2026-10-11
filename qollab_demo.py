@@ -1,34 +1,42 @@
-"""Minimal Qollab-friendly entry point.
+from pathlib import Path
+import sys
 
-Run from repository root after installing requirements:
-    python qollab_demo.py
-"""
+root = Path(__file__).resolve().parent
+source = root / "src"
+if str(source) not in sys.path:
+    sys.path.insert(0, str(source))
 
-from qscope.config import build_from_config, load_config
-from qscope.diagnosis import run_diagnosis
+from qscope.benchmark import run_benchmark, summarize
+from qscope.config import load_config
+from qscope.factory import build_components, build_engine
 
-config = load_config("configs/mvp.json")
-nominal, hidden, posterior, experiments = build_from_config(config)
-settings = config["diagnosis"]
 
-result = run_diagnosis(
-    hidden=hidden,
-    nominal=nominal,
-    posterior=posterior,
-    experiments=experiments,
-    max_steps=int(settings["max_steps"]),
-    strategy="active",
-    seed=int(settings["seed"]),
-    active_score=settings.get("active_score", "information_gain"),
-    repeat_penalty=float(settings.get("repeat_penalty", 0.35)),
-    min_steps=int(settings.get("min_steps", 1)),
-    stop_map_confidence=settings.get("stop_map_confidence"),
+cfg = load_config(root / "configs" / "mvp.json")
+nominal, hypotheses, experiments, predictions, likelihoods = build_components(cfg)
+result = build_engine(
+    cfg,
+    nominal,
+    hypotheses,
+    experiments,
+    predictions,
+    likelihoods,
+).run()
+
+print("status:", result.status)
+print("location:", result.location)
+print("confidence:", round(result.location_probability, 4))
+print("delta:", None if result.delta_mean is None else round(result.delta_mean, 4))
+print("experiments:", result.experiments_used)
+
+rows = run_benchmark(
+    cfg,
+    nominal,
+    hypotheses,
+    experiments,
+    predictions,
+    likelihoods,
+    trials=1,
+    output=root / "artifacts" / "qollab_benchmark.csv",
 )
 
-for step in result.steps:
-    print(
-        f"step {step.step:02d} | {step.experiment_name:<28} | "
-        f"error={step.relative_error:.4f} | MAP={step.map_confidence:.3f}"
-    )
-
-print("\nFinal estimate:", result.final_map_vector)
+print(summarize(rows))

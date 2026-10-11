@@ -1,111 +1,169 @@
 from __future__ import annotations
 
-from dataclasses import asdict
+import csv
+from dataclasses import dataclass
+from pathlib import Path
 
 import numpy as np
 
-from .diagnosis import precompute_predictions, run_diagnosis
-from .hamiltonian import TFIMParams
-from .inference import ParticlePosterior
-from .types import Experiment
+from qscope.backend import LocalQiskitBackend
+from qscope.diagnosis import DiagnosisEngine, MismatchDetector, StoppingRule
+from qscope.inference import Belief
+from qscope.physics import apply_drift
+from qscope.policies import FixedPolicy, HierarchicalInformationPolicy, RandomPolicy
 
 
-def benchmark_strategies(
-    hidden: TFIMParams,
-    nominal: TFIMParams,
-    base_posterior: ParticlePosterior,
-    experiments: list[Experiment],
-    max_steps: int,
+@dataclass(frozen=True)
+class BenchmarkScenario:
+    location: str
+    delta: float
+
+
+def default_scenarios(cfg):
+    deltas = (-0.275, 0.275)
+    return [
+        BenchmarkScenario(term, delta)
+        for term in cfg.hypotheses.terms
+        for delta in deltas
+    ]
+
+
+def result_metrics(result, true_location: str, true_delta: float):
+    if result.delta_mean is None:
+        delta_error = 0.0 if true_location == "NO_DRIFT" else abs(true_delta)
+    else:
+        delta_error = abs(result.delta_mean - true_delta)
+
+    correct_location = result.location == true_location
+    interval_covers = bool(
+        result.delta_low is not None
+        and result.delta_high is not None
+        and result.delta_low <= true_delta <= result.delta_high
+    )
+
+    return {
+        "status": result.status,
+        "location_correct": correct_location,
+        "delta_error": float(delta_error),
+        "experiments_used": int(result.experiments_used),
+        "shots_used": int(result.total_shots),
+        "location_probability": float(result.location_probability),
+        "interval_covers": interval_covers,
+        "diagnosis_correct": bool(
+            result.status == "SUCCESS"
+            and correct_location
+            and delta_error <= 0.075
+        ),
+    }
+
+
+def _fixed_schedule(experiments, budget: int):
+    count = min(len(experiments), max(1, budget))
+    indices = np.linspace(0, len(experiments) - 1, count, dtype=int)
+    return tuple(dict.fromkeys(int(i) for i in indices))
+
+
+def _policy(name, cfg, seed, experiments):
+    if name == "active":
+        return HierarchicalInformationPolicy(cfg.policy.switch_confidence)
+    if name == "random":
+        return RandomPolicy(seed)
+    if name == "fixed":
+        return FixedPolicy(_fixed_schedule(experiments, cfg.stopping.max_experiments))
+    raise ValueError(name)
+
+
+def run_benchmark(
+    cfg,
+    nominal,
+    hypotheses,
+    experiments,
+    predictions,
+    likelihoods,
     trials: int,
-    seed: int = 0,
-    strategies: tuple[str, ...] = ("active", "random", "fixed"),
-    active_score: str = "information_gain",
-    repeat_penalty: float = 0.35,
-) -> list[dict]:
-    if trials <= 0:
-        raise ValueError("trials must be positive")
-    cache = precompute_predictions(base_posterior, experiments)
-    rows: list[dict] = []
+    output,
+):
+    rows = []
+    scenarios = default_scenarios(cfg)
 
-    for strategy in strategies:
-        for trial in range(trials):
-            posterior = base_posterior.clone()
-            result = run_diagnosis(
-                hidden=hidden,
-                nominal=nominal,
-                posterior=posterior,
-                experiments=experiments,
-                max_steps=max_steps,
-                strategy=strategy,  # type: ignore[arg-type]
-                seed=seed + 1000 * trial,
-                cache=cache,
-                active_score=active_score,  # type: ignore[arg-type]
-                repeat_penalty=repeat_penalty,
-                stop_map_confidence=None,
+    for trial in range(trials):
+        for scenario_id, scenario in enumerate(scenarios):
+            true_params = apply_drift(
+                nominal,
+                None if scenario.location == "NO_DRIFT" else scenario.location,
+                scenario.delta,
             )
-            for step in result.steps:
-                row = asdict(step)
-                row["trial"] = trial
+            measurement_seed = cfg.seed + 10000 * trial + 100 * scenario_id
+
+            for policy_name in ("active", "random", "fixed"):
+                engine = DiagnosisEngine(
+                    hypotheses,
+                    experiments,
+                    predictions,
+                    likelihoods,
+                    LocalQiskitBackend(true_params),
+                    _policy(policy_name, cfg, measurement_seed + 31, experiments),
+                    Belief.location_uniform(hypotheses),
+                    StoppingRule(cfg.stopping),
+                    MismatchDetector(
+                        cfg.mismatch.predictive_p_value,
+                        cfg.mismatch.consecutive_failures,
+                    ),
+                    measurement_seed,
+                )
+                result = engine.run()
+                row = {
+                    "trial": trial,
+                    "scenario": scenario_id,
+                    "true_location": scenario.location,
+                    "true_delta": scenario.delta,
+                    "policy": policy_name,
+                }
+                row.update(
+                    result_metrics(
+                        result,
+                        scenario.location,
+                        scenario.delta,
+                    )
+                )
                 rows.append(row)
+
+    path = Path(output)
+    path.parent.mkdir(parents=True, exist_ok=True)
+
+    with path.open("w", newline="", encoding="utf-8") as handle:
+        writer = csv.DictWriter(handle, fieldnames=list(rows[0].keys()))
+        writer.writeheader()
+        writer.writerows(rows)
+
     return rows
 
 
-def summarize_by_step(rows: list[dict]) -> list[dict]:
-    if not rows:
-        return []
-    summary: list[dict] = []
-    strategies = sorted({str(row["strategy"]) for row in rows})
-    for strategy in strategies:
-        strategy_rows = [r for r in rows if r["strategy"] == strategy]
-        for step in sorted({int(r["step"]) for r in strategy_rows}):
-            subset = [r for r in strategy_rows if int(r["step"]) == step]
-            errors = np.asarray([float(r["relative_error"]) for r in subset], dtype=float)
-            correct = np.asarray([bool(r["correct_drift_location"]) for r in subset], dtype=float)
-            summary.append(
-                {
-                    "strategy": strategy,
-                    "step": step,
-                    "mean_relative_error": float(np.mean(errors)),
-                    "std_relative_error": float(np.std(errors)),
-                    "drift_location_accuracy": float(np.mean(correct)),
-                    "trials": len(subset),
-                }
-            )
-    return summary
+def summarize(rows):
+    summary = {}
 
-
-def first_step_below_target(rows: list[dict], target_error: float) -> list[dict]:
-    """Return one row per strategy/trial with first step reaching target, or None."""
-    out: list[dict] = []
-    keys = sorted({(str(r["strategy"]), int(r["trial"])) for r in rows})
-    for strategy, trial in keys:
-        trial_rows = sorted(
-            [r for r in rows if r["strategy"] == strategy and int(r["trial"]) == trial],
-            key=lambda r: int(r["step"]),
-        )
-        reached = next((r for r in trial_rows if float(r["relative_error"]) <= target_error), None)
-        out.append(
-            {
-                "strategy": strategy,
-                "trial": trial,
-                "first_step_below_target": None if reached is None else int(reached["step"]),
-                "reached_target": reached is not None,
-            }
-        )
-    return out
-
-
-def benchmark_headline(rows: list[dict], target_error: float) -> dict:
-    hits = first_step_below_target(rows, target_error)
-    result: dict[str, dict] = {}
-    for strategy in sorted({h["strategy"] for h in hits}):
-        subset = [h for h in hits if h["strategy"] == strategy]
-        reached_steps = [h["first_step_below_target"] for h in subset if h["reached_target"]]
-        result[strategy] = {
-            "success_rate": float(np.mean([h["reached_target"] for h in subset])),
-            "median_steps_when_successful": (
-                None if not reached_steps else float(np.median(reached_steps))
+    for policy in ("active", "random", "fixed"):
+        selected = [row for row in rows if row["policy"] == policy]
+        summary[policy] = {
+            "n": len(selected),
+            "location_accuracy": float(
+                np.mean([row["location_correct"] for row in selected])
             ),
-            "target_relative_error": target_error,
+            "mean_delta_error": float(
+                np.mean([row["delta_error"] for row in selected])
+            ),
+            "mean_experiments": float(
+                np.mean([row["experiments_used"] for row in selected])
+            ),
+            "status_success_rate": float(
+                np.mean([row["status"] == "SUCCESS" for row in selected])
+            ),
+            "diagnosis_accuracy": float(
+                np.mean([row["diagnosis_correct"] for row in selected])
+            ),
+            "coverage_90": float(
+                np.mean([row["interval_covers"] for row in selected])
+            ),
         }
-    return result
+
+    return summary

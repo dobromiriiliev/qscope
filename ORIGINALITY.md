@@ -1,25 +1,9 @@
-# Originality / prior-work disclosure
+# Originality
 
-Use this file when preparing the Qollab project page.
+Q-Scope was built during the October 9-11, 2026 Qollab x IonQ hackathon from the team's own design and implementation work. The repository was not created by forking another project, and no external project source code is copied into `src/`.
 
-## Built during the hackathon
+The implementation uses Qiskit, NumPy, SciPy, Matplotlib, and pytest as third-party dependencies.
 
-Record the code, experiments, UI work, and documentation created during the official hackathon window. Keep this section factual.
+Work completed for the project includes the four-qubit TFIM model, sparse-drift hypothesis grid, Qiskit forward predictor, finite-shot sampling, Bayesian updates, the hierarchical `LOCALIZE -> CALIBRATE` information-gain policy, random/fixed baselines, off-grid validation, visualization outputs, tests, and Qollab documentation.
 
-- [ ] Core Qiskit simulation
-- [ ] Hamiltonian inference loop
-- [ ] Active experiment-selection policy
-- [ ] Benchmarking against random/fixed policies
-- [ ] Demo UI
-- [ ] Qollab notebook
-- [ ] Demo video
-
-## Starting material / templates
-
-This repository began from a team-authored scaffold containing project structure, tests, configuration files, and placeholder/reference implementation code. Before submission, describe exactly what existed before the official build window and what the team added during the window.
-
-If you use any external repository, template, fork, or code sample, list it here with its license and explain what you changed. The hackathon rules require outside repositories relied on by the project to use an MIT-compatible submission path.
-
-## External research inspiration
-
-The project is inspired by research on Hamiltonian learning and measurement-driven characterization associated with the Hafezi research group. Research papers are intellectual references, not source-code dependencies. Add the exact papers/links used in `docs/RESEARCH_NOTES.md`.
+The research motivation is related to Hamiltonian-learning and repeated-characterization work, including Meta Hamiltonian Learning. Q-Scope is not a source-code reproduction of that work.

@@ -1,16 +1,19 @@
 # Contributing
 
-Keep changes small enough to review quickly during the hackathon.
+Keep changes focused and reproducible.
 
 1. Branch from `main`.
-2. Run `ruff check src tests scripts ui`.
+2. Create a virtual environment and install the development dependencies.
 3. Run `pytest -q`.
-4. If you change physics assumptions, update `docs/RESEARCH_NOTES.md`.
-5. If you change the judged demo path, update `docs/QOLLAB_PROJECT_PAGE.md` and `docs/DEMO_SCRIPT.md`.
-6. Do not commit API keys, tokens, private notebooks, or generated artifacts.
+4. Run the smoke configuration before changing the full demo.
+5. Update the relevant documentation when physics assumptions, thresholds, or benchmark definitions change.
+6. Do not commit credentials, local virtual environments, generated caches, or private data.
 
-Suggested ownership:
+Useful commands:
 
-- Christian: physics assumptions and validation
-- Dobromir: Qiskit, inference, active learning, integration
-- Alex: baselines, benchmarks, UI, reproducibility
+```bash
+pip install -e '.[dev]'
+pytest -q
+qscope demo --config configs/smoke.json --output artifacts/smoke.json --plot artifacts/smoke.png
+qscope validate-submission --root .
+```
