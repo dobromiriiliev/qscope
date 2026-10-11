@@ -1,0 +1,129 @@
+{
+  "hidden_system": {
+    "location": "ZZ_23",
+    "delta": -0.35
+  },
+  "diagnosis": {
+    "location": "ZZ_23",
+    "confidence": 0.999999995726464,
+    "delta": -0.3496956189245735,
+    "credible_interval_90": [
+      -0.35,
+      -0.35
+    ],
+    "experiments": 7,
+    "shots": 896,
+    "target_reached": true,
+    "trace": [
+      {
+        "step": 1,
+        "mode": "LOCALIZE",
+        "state": "++++",
+        "time": 0.8,
+        "observable": "X_0",
+        "location": "ZZ_23",
+        "confidence": 0.47919702498087374,
+        "delta": 3.7546062610846476e-06
+      },
+      {
+        "step": 2,
+        "mode": "LOCALIZE",
+        "state": "++++",
+        "time": 0.8,
+        "observable": "X_3",
+        "location": "ZZ_23",
+        "confidence": 0.9997632975910616,
+        "delta": -0.30069877344779666
+      },
+      {
+        "step": 3,
+        "mode": "CALIBRATE",
+        "state": "++++",
+        "time": 1.2,
+        "observable": "X_3",
+        "location": "ZZ_23",
+        "confidence": 0.9999999970597443,
+        "delta": -0.35576118795578304
+      },
+      {
+        "step": 4,
+        "mode": "CALIBRATE",
+        "state": "++++",
+        "time": 1.5,
+        "observable": "X_3",
+        "location": "ZZ_23",
+        "confidence": 0.9999999978529166,
+        "delta": -0.3862105953393249
+      },
+      {
+        "step": 5,
+        "mode": "CALIBRATE",
+        "state": "++++",
+        "time": 1.5,
+        "observable": "X_3",
+        "location": "ZZ_23",
+        "confidence": 0.9999999959725221,
+        "delta": -0.3571925494032868
+      },
+      {
+        "step": 6,
+        "mode": "CALIBRATE",
+        "state": "++++",
+        "time": 1.5,
+        "observable": "X_3",
+        "location": "ZZ_23",
+        "confidence": 0.9999999956416479,
+        "delta": -0.3539998699603722
+      },
+      {
+        "step": 7,
+        "mode": "CALIBRATE",
+        "state": "++++",
+        "time": 1.5,
+        "observable": "X_3",
+        "location": "ZZ_23",
+        "confidence": 0.999999995726464,
+        "delta": -0.3496956189245735
+      }
+    ]
+  },
+  "benchmark": {
+    "type": "off_grid",
+    "truth_deltas": [
+      -0.275,
+      0.275
+    ],
+    "grid_spacing": 0.05,
+    "scenarios": 6,
+    "seeds": 2,
+    "summary": {
+      "active": {
+        "success_rate": 0.9166666666666666,
+        "mean_experiments": 7.666666666666667,
+        "mean_error": 0.025304556734824738,
+        "coverage_rate": 0.5,
+        "std_experiments": 3.2998316455372216,
+        "std_error": 0.01707437268313548,
+        "n": 12
+      },
+      "random": {
+        "success_rate": 0.0,
+        "mean_experiments": 15.0,
+        "mean_error": 0.051937754568423,
+        "coverage_rate": 0.9166666666666666,
+        "std_experiments": 0.0,
+        "std_error": 0.028948409414907138,
+        "n": 12
+      },
+      "fixed": {
+        "success_rate": 0.16666666666666666,
+        "mean_experiments": 14.916666666666666,
+        "mean_error": 0.11069655483087691,
+        "coverage_rate": 0.8333333333333334,
+        "std_experiments": 0.2763853991962833,
+        "std_error": 0.10009653049769698,
+        "n": 12
+      }
+    }
+  }
+}
