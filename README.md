@@ -167,3 +167,34 @@ The current prototype deliberately focuses on one drifting nearest-neighbor `ZZ`
 ## License
 
 MIT. See [`LICENSE`](LICENSE).
+
+## Visualizations
+
+The project includes short Manim animations for the main ideas behind Q-Scope and figures generated directly by the diagnostic pipeline.
+
+### How the method works
+
+- [Hamiltonian drift](assets/animations/HamiltonianDrift.mp4)
+- [Bayesian posterior update](assets/animations/BayesianPosterior.mp4)
+- [Expected information gain](assets/animations/ExpectedInformationGain.mp4)
+- [LOCALIZE to CALIBRATE](assets/animations/LocalizeCalibrate.mp4)
+
+The animations are explanatory. Numerical values shown in the schematic posterior animations are illustrative.
+
+### Actual run outputs
+
+#### Diagnosis dashboard
+
+![Q-Scope diagnosis dashboard](assets/results/qscope_dashboard.png)
+
+#### Adaptive measurement protocol
+
+![Q-Scope adaptive protocol](assets/results/qscope_protocol.png)
+
+#### Off-grid benchmark
+
+![Q-Scope off-grid benchmark](assets/results/qscope_offgrid_benchmark.png)
+
+The underlying numerical results are available in [`assets/results/qscope_results.json`](assets/results/qscope_results.json).
+
+More detail is available in [`docs/VISUALIZATIONS.md`](docs/VISUALIZATIONS.md).

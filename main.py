@@ -297,7 +297,7 @@ def select_experiment(weights, hypotheses, experiments, predictions, likelihoods
 
 def diagnose(
     true_location,
-    true_delta,
+    true_delta, 
     hypotheses,
     experiments,
     predictions,
